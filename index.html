@@ -7,26 +7,14 @@
  
 <!--
   ============================================================
-  ★★★ 設定區：只有這裡需要你動手 ★★★
-  要讓全家手機跨裝置「即時共享」，請申請免費 Firebase 專案，
-  把設定值貼到下面的 FIREBASE_CONFIG 物件中。
-  完整步驟請看附帶的「部署說明.md」。
-  不填也能開啟使用，但資料只會留在目前這支裝置／瀏覽器，
-  重灌瀏覽器或換手機就看不到，家人也看不到彼此的清單。
+  ★★★ 設定區：填入 Cloudflare Worker 網址 ★★★
+  把你的 Worker 網址貼到下面，永久免費、無請求量限制。
   ============================================================
 -->
 <script>
-  window.FIREBASE_CONFIG = {
-    apiKey: "",
-    authDomain: "",
-    projectId: "",
-    storageBucket: "",
-    messagingSenderId: "",
-    appId: ""
-  };
+  window.CF_WORKER_URL = "https://fridge-api.xiaoyicheng91319.workers.dev";
+  window.FIREBASE_CONFIG = { apiKey:"", authDomain:"", projectId:"", storageBucket:"", messagingSenderId:"", appId:"" };
 </script>
-<script src="https://www.gstatic.com/firebasejs/12.15.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore-compat.js"></script>
  
 <style>
   :root{
@@ -54,7 +42,7 @@
     font-family:"PingFang TC","Heiti TC","Microsoft JhengHei","Noto Sans TC",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
     -webkit-font-smoothing:antialiased;
     min-height:100vh;
-    padding-bottom:84px;
+    padding-bottom:calc(84px + env(safe-area-inset-bottom));
   }
   .mono{font-family:ui-monospace,"SF Mono","Roboto Mono","Courier New",monospace;}
   #app{max-width:520px;margin:0 auto;min-height:100vh;position:relative;}
@@ -174,21 +162,22 @@
  
   /* ---------- FAB ---------- */
   .fab{
-    position:fixed;left:50%;bottom:78px;transform:translateX(-50%);
+    position:fixed;left:50%;bottom:calc(78px + env(safe-area-inset-bottom));transform:translateX(-50%);
     background:var(--ink);color:#fff;border:none;border-radius:30px;
     padding:13px 26px;font-size:14.5px;font-weight:800;box-shadow:0 6px 16px rgba(31,59,62,0.3);
     display:flex;align-items:center;gap:8px;cursor:pointer;z-index:30;
-    max-width:488px;
+    white-space:nowrap;
   }
  
   /* ---------- Bottom nav ---------- */
   .bottomnav{
-    position:fixed;bottom:0;left:0;right:0;background:var(--paper);
+    position:fixed;bottom:0;left:50%;transform:translateX(-50%);
+    background:var(--paper);
     border-top:2px dashed var(--line);display:flex;z-index:25;
-    max-width:520px;margin:0 auto;
+    width:100%;max-width:520px;
   }
   .navbtn{
-    flex:1;border:none;background:none;padding:10px 4px 12px;display:flex;flex-direction:column;
+    flex:1;border:none;background:none;padding:10px 4px calc(12px + env(safe-area-inset-bottom));display:flex;flex-direction:column;
     align-items:center;gap:2px;color:var(--ink-soft);font-size:10.5px;font-weight:700;cursor:pointer;
   }
   .navbtn .ic{font-size:19px;}
@@ -296,6 +285,57 @@
     font-size:10.5px;background:var(--bg);border-radius:10px;padding:1px 7px;color:var(--ink-soft);
     display:inline-block;font-weight:700;
   }
+ 
+  /* ---------- Shopping list ---------- */
+  .shop-item{
+    background:var(--paper);border-radius:14px;box-shadow:var(--shadow);
+    padding:14px 14px 14px 12px;margin:0 16px 10px;
+    border:1px solid rgba(31,59,62,0.06);
+    display:flex;align-items:flex-start;gap:12px;
+    transition:opacity .2s;
+  }
+  .shop-item.bought{ opacity:0.45; }
+  .shop-check{
+    width:24px;height:24px;border-radius:50%;border:2px solid var(--line);
+    flex:none;margin-top:1px;cursor:pointer;display:flex;align-items:center;justify-content:center;
+    font-size:13px;background:var(--paper);transition:all .15s;
+  }
+  .shop-check.checked{ background:var(--fresh);border-color:var(--fresh);color:#fff; }
+  .shop-body{ flex:1;min-width:0; }
+  .shop-name{ font-weight:800;font-size:14px;line-height:1.3; }
+  .shop-item.bought .shop-name{ text-decoration:line-through;color:var(--ink-soft); }
+  .shop-meta{ font-size:11.5px;color:var(--ink-soft);margin-top:3px;display:flex;flex-wrap:wrap;gap:6px;align-items:center; }
+  .shop-urgent{ display:inline-block;background:#FFF0EC;color:var(--urgent);border-radius:8px;padding:1px 7px;font-size:10.5px;font-weight:800; }
+  .shop-adder{ font-size:10.5px;color:var(--none); }
+  .shop-del{ color:var(--line);font-size:18px;cursor:pointer;flex:none;padding:2px 4px; }
+  .shop-del:hover{ color:var(--expired); }
+  .shop-section-head{ display:flex;align-items:center;gap:8px;padding:16px 16px 6px;font-size:12px;font-weight:800;color:var(--ink-soft);letter-spacing:0.5px; }
+  .shop-section-head .dot{ width:7px;height:7px;border-radius:50%;flex:none; }
+  .shop-add-bar{
+    margin:8px 16px 16px;background:var(--paper);border-radius:14px;
+    box-shadow:var(--shadow);padding:12px 14px;
+  }
+  .shop-add-bar input[type=text]{
+    width:100%;border:1.5px solid var(--line);background:var(--bg);border-radius:10px;
+    padding:9px 12px;font-size:14px;color:var(--ink);font-family:inherit;margin-bottom:8px;
+  }
+  .shop-add-bar input:focus{ outline:2px solid var(--cold); }
+  .shop-add-row{ display:flex;gap:8px;align-items:center; }
+  .shop-add-row input[type=text]{ flex:1;margin-bottom:0; }
+  .shop-urgent-toggle{
+    border:1.5px solid var(--line);background:var(--paper);border-radius:8px;
+    padding:7px 10px;font-size:12px;cursor:pointer;white-space:nowrap;font-weight:700;color:var(--ink-soft);
+  }
+  .shop-urgent-toggle.on{ border-color:var(--urgent);color:var(--urgent);background:#FFF0EC; }
+  .shop-add-btn{
+    border:none;background:var(--ink);color:#fff;border-radius:10px;
+    padding:9px 16px;font-size:13px;font-weight:800;cursor:pointer;white-space:nowrap;
+  }
+  .shop-history-toggle{
+    display:flex;align-items:center;gap:6px;padding:6px 16px 14px;
+    font-size:12px;color:var(--ink-soft);cursor:pointer;font-weight:700;
+  }
+ 
 </style>
 </head>
 <body>
@@ -342,12 +382,14 @@ let STATE = {
   code:'',
   name:'',
   items:[],
+  shoplist:[],   // 購物清單 [{id,name,qty,note,urgent,addedBy,addedAt,bought,boughtBy,boughtAt}]
   locations: DEFAULT_LOCATIONS.slice(),
   customCategories: [],
-  view:'overview',          // overview | bylocation | settings
+  view:'overview',          // overview | bylocation | settings | shoplist
   activeLocation:null,
   searchText:'',
   activeCat:'all',
+  showBought:false,         // 購物清單：是否顯示已購買
   booted:false,
 };
  
@@ -415,27 +457,34 @@ function toast(msg, ms=2200){
 ---------------------------------------------- */
 const IN_CLAUDE_ARTIFACT = (typeof window.storage !== 'undefined');
  
-function firebaseConfigured(){
-  const c = window.FIREBASE_CONFIG;
-  return !!(c && c.apiKey && c.projectId && c.apiKey.trim() && c.projectId.trim());
+function cfWorkerConfigured(){
+  const u = window.CF_WORKER_URL;
+  return !!(u && u.trim() && u.startsWith('http'));
 }
  
-let SHARED_BACKEND = IN_CLAUDE_ARTIFACT ? 'claude' : (firebaseConfigured() ? 'firebase' : 'local');
-let firebaseDb = null;
+let SHARED_BACKEND = IN_CLAUDE_ARTIFACT ? 'claude' : (cfWorkerConfigured() ? 'cloudflare' : 'local');
 let realtimeUnsub = null;
  
-function initBackend(){
-  if(SHARED_BACKEND==='firebase'){
-    try{
-      const app = firebase.initializeApp(window.FIREBASE_CONFIG);
-      firebaseDb = firebase.firestore();
-    }catch(e){
-      console.error('firebase init failed', e);
-      SHARED_BACKEND='local';
-      toast('⚠️ Firebase 設定有誤，暫時切換為「僅本機儲存」模式');
-    }
-  }
+async function cfRead(code){
+  try{
+    const resp = await fetch(window.CF_WORKER_URL + '?code=' + encodeURIComponent(code));
+    if(!resp.ok) return null;
+    return await resp.json();
+  }catch(e){ console.error('cf read failed', e); return null; }
 }
+ 
+async function cfWrite(code, record){
+  try{
+    const resp = await fetch(window.CF_WORKER_URL + '?code=' + encodeURIComponent(code), {
+      method:'PUT',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(record)
+    });
+    return resp.ok;
+  }catch(e){ console.error('cf write failed', e); return false; }
+}
+ 
+function initBackend(){ /* Cloudflare 不需初始化 */ }
  
 /* ---------- 共用小工具 ---------- */
 function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
@@ -504,70 +553,41 @@ async function firebaseSetShared(key, value){
   }
 }
  
-/* 個人資料（姓名/代碼）：Claude 預覽用 window.storage，獨立部署版一律用 localStorage（純本機，本來就不該共享） */
+/* 個人資料用 localStorage（本機），共享資料用 Cloudflare KV 或 Claude storage */
 async function storageGet(key, shared){
   if(!shared){
     if(IN_CLAUDE_ARTIFACT){
       try{
         const r = await withRetry(()=>window.storage.get(key, false), 2, 400);
         return {ok:true, value: r ? r.value : null};
-      }catch(e){
-        console.error('storage get failed', key, e);
-        return {ok:false, value:null};
-      }
+      }catch(e){ return {ok:false, value:null}; }
     }
     return localGet(key);
   }
-  // shared === true
   if(SHARED_BACKEND==='claude'){
     try{
       const r = await withRetry(()=>window.storage.get(key, true), 2, 400);
       return {ok:true, value: r ? r.value : null};
-    }catch(e){
-      console.error('storage get failed', key, e);
-      return {ok:false, value:null};
-    }
+    }catch(e){ return {ok:false, value:null}; }
   }
-  if(SHARED_BACKEND==='firebase'){
-    return await firebaseGetShared(key);
-  }
-  return localGet(key); // local 模式：共享資料其實只存在這台裝置
+  // cloudflare / local：shared 資料透過 loadHousehold 一次讀取，這裡不單獨呼叫
+  return localGet(key);
 }
 async function storageSet(key, value, shared){
   let result;
   if(!shared){
     if(IN_CLAUDE_ARTIFACT){
-      try{
-        await withRetry(()=>window.storage.set(key, value, false), 3, 500);
-        result={ok:true};
-      }catch(e){
-        console.error('storage set failed', key, e);
-        result={ok:false};
-      }
-    } else {
-      result = localSet(key, value);
-    }
+      try{ await withRetry(()=>window.storage.set(key, value, false), 3, 500); result={ok:true}; }
+      catch(e){ result={ok:false}; }
+    } else { result = localSet(key, value); }
   } else if(SHARED_BACKEND==='claude'){
-    try{
-      await withRetry(()=>window.storage.set(key, value, true), 3, 500);
-      result={ok:true};
-    }catch(e){
-      console.error('storage set failed', key, e);
-      result={ok:false};
-    }
-  } else if(SHARED_BACKEND==='firebase'){
-    result = await firebaseSetShared(key, value);
+    try{ await withRetry(()=>window.storage.set(key, value, true), 3, 500); result={ok:true}; }
+    catch(e){ result={ok:false}; }
   } else {
     result = localSet(key, value);
   }
-  if(result.ok){
-    PENDING_SYNC = false;
-    updateSyncIndicator();
-  } else {
-    PENDING_SYNC = true;
-    updateSyncIndicator();
-    toast('⚠️ 同步失敗，已保留在畫面上，稍後可按🔄重試');
-  }
+  if(result.ok){ PENDING_SYNC=false; updateSyncIndicator(); }
+  else { PENDING_SYNC=true; updateSyncIndicator(); toast('⚠️ 同步失敗，稍後可按🔄重試'); }
   return result.ok ? result : null;
 }
 function updateSyncIndicator(){
@@ -575,86 +595,125 @@ function updateSyncIndicator(){
   if(btn) btn.textContent = PENDING_SYNC ? '⚠️' : '🔄';
 }
  
-function itemsKey(code){ return 'items:'+code; }
-function configKey(code){ return 'config:'+code; }
 const PROFILE_KEY='profile';
  
 async function loadProfile(){
-  const r = await storageGet(PROFILE_KEY, false);
-  if(r.ok && r.value){
-    try{ return JSON.parse(r.value); }catch(e){ return null; }
+  if(IN_CLAUDE_ARTIFACT){
+    try{
+      const r = await withRetry(()=>window.storage.get(PROFILE_KEY, false), 2, 400);
+      if(r && r.value) return JSON.parse(r.value);
+    }catch(e){}
+    return null;
   }
+  const r = localGet(PROFILE_KEY);
+  if(r.ok && r.value){ try{ return JSON.parse(r.value); }catch(e){ return null; } }
   return null;
 }
 async function saveProfile(code,name){
-  await storageSet(PROFILE_KEY, JSON.stringify({code,name}), false);
+  const val = JSON.stringify({code,name});
+  if(IN_CLAUDE_ARTIFACT){
+    try{ await withRetry(()=>window.storage.set(PROFILE_KEY, val, false), 3, 500); }catch(e){}
+  } else { localSet(PROFILE_KEY, val); }
 }
  
 async function loadHousehold(code){
-  const [itemsR, cfgR] = await Promise.all([
-    storageGet(itemsKey(code), true),
-    storageGet(configKey(code), true)
-  ]);
-  if(!itemsR.ok){
-    toast('⚠️ 讀取冰箱資料失敗，請稍後按🔄重試，目前畫面可能不是最新狀態');
+  if(SHARED_BACKEND==='cloudflare'){
+    const rec = await cfRead(code);
+    if(rec===null){ toast('⚠️ 讀取冰箱資料失敗，請稍後按🔄重試'); }
+    STATE.items = (rec && Array.isArray(rec.items)) ? rec.items : [];
+    STATE.shoplist = (rec && Array.isArray(rec.shoplist)) ? rec.shoplist : [];
+    const cfg = rec && rec.config ? rec.config : null;
+    if(cfg){
+      STATE.locations = (cfg.locations && cfg.locations.length) ? cfg.locations : DEFAULT_LOCATIONS.slice();
+      STATE.customCategories = cfg.customCategories || [];
+    } else {
+      STATE.locations = DEFAULT_LOCATIONS.slice();
+      STATE.customCategories = [];
+    }
+    return;
   }
+  // claude / local 模式
+  if(SHARED_BACKEND==='claude'){
+    const [itemsR, cfgR] = await Promise.all([
+      (async()=>{ try{ const r=await withRetry(()=>window.storage.get('items:'+code,true),2,400); return {ok:true,value:r?r.value:null}; }catch(e){ return {ok:false,value:null}; } })(),
+      (async()=>{ try{ const r=await withRetry(()=>window.storage.get('config:'+code,true),2,400); return {ok:true,value:r?r.value:null}; }catch(e){ return {ok:false,value:null}; } })()
+    ]);
+    STATE.items = itemsR.ok ? safeParse(itemsR.value, []) : [];
+    const cfg = (cfgR.ok && cfgR.value) ? safeParse(cfgR.value, null) : null;
+    if(cfg){ STATE.locations=(cfg.locations&&cfg.locations.length)?cfg.locations:DEFAULT_LOCATIONS.slice(); STATE.customCategories=cfg.customCategories||[]; }
+    else { STATE.locations=DEFAULT_LOCATIONS.slice(); STATE.customCategories=[]; }
+    return;
+  }
+  // local
+  const itemsR = localGet('fridge_items:'+code);
+  const cfgR = localGet('fridge_config:'+code);
   STATE.items = itemsR.ok ? safeParse(itemsR.value, []) : [];
-  const cfg = (cfgR.ok && cfgR.value) ? safeParse(cfgR.value, null) : null;
-  if(cfg){
-    STATE.locations = (cfg.locations && cfg.locations.length) ? cfg.locations : DEFAULT_LOCATIONS.slice();
-    STATE.customCategories = cfg.customCategories || [];
-  } else {
-    STATE.locations = DEFAULT_LOCATIONS.slice();
-    STATE.customCategories = [];
-  }
-  subscribeRealtime(code);
+  const cfg = cfgR.ok ? safeParse(cfgR.value, null) : null;
+  if(cfg){ STATE.locations=(cfg.locations&&cfg.locations.length)?cfg.locations:DEFAULT_LOCATIONS.slice(); STATE.customCategories=cfg.customCategories||[]; }
+  else { STATE.locations=DEFAULT_LOCATIONS.slice(); STATE.customCategories=[]; }
 }
  
-/* Firebase 模式下訂閱即時更新：家人新增/修改後，畫面會自動刷新，不用手動按重新整理 */
-function subscribeRealtime(code){
-  if(realtimeUnsub){ realtimeUnsub(); realtimeUnsub=null; }
-  if(SHARED_BACKEND!=='firebase' || !firebaseDb) return;
-  try{
-    realtimeUnsub = firebaseDb.collection('households').doc(code).onSnapshot((snap)=>{
-      if(!snap.exists) return;
-      const data = snap.data() || {};
-      if(data.items) STATE.items = data.items;
-      if(data.config){
-        STATE.locations = (data.config.locations && data.config.locations.length) ? data.config.locations : STATE.locations;
-        STATE.customCategories = data.config.customCategories || STATE.customCategories;
-      }
-      if(STATE.booted && document.getElementById('app')) render();
-    }, (err)=>{
-      console.error('realtime listener error', err);
-    });
-  }catch(e){
-    console.error('subscribeRealtime failed', e);
-  }
-}
+function subscribeRealtime(code){ /* Cloudflare KV 不支援即時推送，家人按🔄可取得最新資料 */ }
  
 function safeParse(raw, fallback){
   if(raw==null) return fallback;
   try{ return JSON.parse(raw); }catch(e){ return fallback; }
 }
-async function saveItems(){
-  await storageSet(itemsKey(STATE.code), JSON.stringify(STATE.items), true);
-}
-async function saveConfig(){
-  await storageSet(configKey(STATE.code), JSON.stringify({
-    locations: STATE.locations,
-    customCategories: STATE.customCategories
-  }), true);
+ 
+async function _cfWriteAll(){
+  const ok = await cfWrite(STATE.code, {
+    items: STATE.items,
+    shoplist: STATE.shoplist,
+    config: { locations: STATE.locations, customCategories: STATE.customCategories }
+  });
+  if(ok){ PENDING_SYNC=false; }
+  else { PENDING_SYNC=true; toast('⚠️ 同步失敗，稍後可按🔄重試'); }
+  updateSyncIndicator();
 }
  
-/* 每次寫入前重新拉取最新的共享資料，降低多人同時編輯互相覆蓋的機會。
-   注意：若讀取失敗，務必保留目前記憶體中的資料，絕不可清空，
-   否則接下來的儲存動作會把全家的清單覆蓋成只剩本機這一筆。 */
+async function saveItems(){
+  if(SHARED_BACKEND==='cloudflare'){ await _cfWriteAll(); return; }
+  if(SHARED_BACKEND==='claude'){
+    try{ await withRetry(()=>window.storage.set('items:'+STATE.code, JSON.stringify(STATE.items), true), 3, 500); PENDING_SYNC=false; }
+    catch(e){ PENDING_SYNC=true; toast('⚠️ 同步失敗'); }
+    updateSyncIndicator(); return;
+  }
+  localSet('fridge_items:'+STATE.code, JSON.stringify(STATE.items));
+}
+async function saveConfig(){
+  if(SHARED_BACKEND==='cloudflare'){ await _cfWriteAll(); return; }
+  if(SHARED_BACKEND==='claude'){
+    try{ await withRetry(()=>window.storage.set('config:'+STATE.code, JSON.stringify({locations:STATE.locations,customCategories:STATE.customCategories}), true), 3, 500); }
+    catch(e){}
+    return;
+  }
+  localSet('fridge_config:'+STATE.code, JSON.stringify({locations:STATE.locations,customCategories:STATE.customCategories}));
+}
+ 
+async function saveShoplist(){
+  if(SHARED_BACKEND==='cloudflare'){ await _cfWriteAll(); return; }
+  if(SHARED_BACKEND==='claude'){
+    try{ await withRetry(()=>window.storage.set('shoplist:'+STATE.code, JSON.stringify(STATE.shoplist), true), 3, 500); }
+    catch(e){}
+    return;
+  }
+  localSet('fridge_shoplist:'+STATE.code, JSON.stringify(STATE.shoplist));
+}
+ 
 async function refreshItemsFromServer(){
-  const r = await storageGet(itemsKey(STATE.code), true);
-  if(r.ok){
-    STATE.items = safeParse(r.value, STATE.items);
-  } else {
-    toast('⚠️ 無法取得最新資料，將先以目前畫面內容為準，建議稍後按🔄重新整理確認');
+  if(SHARED_BACKEND==='cloudflare'){
+    const rec = await cfRead(STATE.code);
+    if(rec && Array.isArray(rec.items)) STATE.items = rec.items;
+    if(rec && Array.isArray(rec.shoplist)) STATE.shoplist = rec.shoplist;
+    if(!rec) toast('⚠️ 無法取得最新資料，以目前畫面為準');
+    return;
+  }
+  // claude / local: no-op or localStorage
+  if(SHARED_BACKEND==='claude'){
+    try{
+      const r = await withRetry(()=>window.storage.get('items:'+STATE.code, true), 2, 400);
+      if(r && r.value) STATE.items = safeParse(r.value, STATE.items);
+    }catch(e){}
   }
 }
  
@@ -699,6 +758,7 @@ function renderTopbar(){
  
 function renderTabsOrNone(){
   if(STATE.view==='settings') return '';
+  if(STATE.view==='shoplist') return '';
   return `
   <div class="stats">
     ${statBox('expired','已過期', countByStatus(['expired']))}
@@ -725,6 +785,7 @@ function countByStatus(keys){
 function renderBody(){
   if(STATE.view==='settings') return renderSettings();
   if(STATE.view==='bylocation') return renderByLocation();
+  if(STATE.view==='shoplist') return renderShoplist();
   return renderOverview();
 }
  
@@ -805,32 +866,96 @@ function renderCard(item){
  
 function renderFab(){
   if(STATE.view==='settings') return '';
+  if(STATE.view==='shoplist') return `<button class="fab" id="fab-add">➕ 加入購物清單</button>`;
   return `<button class="fab" id="fab-add">➕ 新增食品</button>`;
 }
  
 function renderBottomNav(){
-  const item=(key,icon,label)=>`<button class="navbtn ${STATE.view===key?'active':''}" data-nav="${key}"><span class="ic">${icon}</span>${label}</button>`;
+  const pendingCount = STATE.shoplist.filter(i=>!i.bought).length;
+  const badge = pendingCount>0 ? `<span style="position:absolute;top:6px;right:calc(50% - 22px);background:var(--urgent);color:#fff;border-radius:10px;font-size:9px;font-weight:900;padding:1px 5px;min-width:14px;text-align:center;">${pendingCount}</span>` : '';
+  const item=(key,icon,label,extra='')=>`<button class="navbtn ${STATE.view===key?'active':''}" data-nav="${key}" style="position:relative;">${extra}<span class="ic">${icon}</span>${label}</button>`;
   return `<div class="bottomnav">
     ${item('overview','📋','總覽')}
     ${item('bylocation','🗂️','分層')}
+    ${item('shoplist','🛒','購物',badge)}
     ${item('settings','⚙️','設定')}
+  </div>`;
+}
+ 
+/* ---------- Shopping List Render ---------- */
+function renderShoplist(){
+  const pending = STATE.shoplist.filter(i=>!i.bought);
+  const bought  = STATE.shoplist.filter(i=>i.bought);
+ 
+  let html = '';
+ 
+  // 新增列
+  html += `
+  <div class="shop-add-bar">
+    <input type="text" id="shop-input" placeholder="輸入品項名稱…" autocomplete="off">
+    <div class="shop-add-row">
+      <input type="text" id="shop-note" placeholder="備註（數量、品牌、去哪買）" autocomplete="off">
+      <button class="shop-urgent-toggle" id="shop-urgent-btn">🔥 急</button>
+      <button class="shop-add-btn" id="shop-add-btn">新增</button>
+    </div>
+  </div>`;
+ 
+  // 待購區
+  if(pending.length===0){
+    html += `<div class="empty"><span class="big">🛒</span>清單是空的，加入需要購買的東西吧！</div>`;
+  } else {
+    html += `<div class="shop-section-head"><span class="dot" style="background:var(--cold);"></span>待購買（${pending.length}）</div>`;
+    pending.forEach(it=>{ html += renderShopItem(it); });
+  }
+ 
+  // 已購區
+  if(bought.length>0){
+    html += `<div class="shop-history-toggle" id="shop-history-toggle">
+      ${STATE.showBought?'▾':'▸'} 已購買（${bought.length}）
+    </div>`;
+    if(STATE.showBought){
+      html += `<div class="shop-section-head"><span class="dot" style="background:var(--fresh);"></span>已購買</div>`;
+      bought.forEach(it=>{ html += renderShopItem(it); });
+      html += `<div style="padding:0 16px 8px;"><button class="danger-btn" id="shop-clear-bought" style="font-size:12.5px;padding:9px;">🗑️ 清除所有已購買記錄</button></div>`;
+    }
+  }
+ 
+  return html;
+}
+ 
+function renderShopItem(it){
+  const isUrgent = it.urgent ? `<span class="shop-urgent">🔥 急</span>` : '';
+  const adder = it.addedBy ? `<span class="shop-adder">${escapeHtml(it.addedBy)} 加入</span>` : '';
+  const boughtBy = it.bought && it.boughtBy ? `<span class="shop-adder">✓ ${escapeHtml(it.boughtBy)} 購入</span>` : '';
+  const note = it.note ? `<span>${escapeHtml(it.note)}</span>` : '';
+  return `
+  <div class="shop-item ${it.bought?'bought':''}" data-shop-id="${it.id}">
+    <div class="shop-check ${it.bought?'checked':''}" data-shop-check="${it.id}">${it.bought?'✓':''}</div>
+    <div class="shop-body">
+      <div class="shop-name">${escapeHtml(it.name)}</div>
+      <div class="shop-meta">${isUrgent}${note}${adder}${boughtBy}</div>
+    </div>
+    <span class="shop-del" data-shop-del="${it.id}">✕</span>
   </div>`;
 }
  
 /* ---------- Settings ---------- */
 function backendStatusBanner(){
-  if(SHARED_BACKEND==='firebase'){
+  if(SHARED_BACKEND==='cloudflare'){
     return `<div class="ai-banner" style="border-color:var(--fresh);color:var(--fresh);">
-      ☁️ 已連接 Firebase，全家可即時跨裝置同步
+      ☁️ 已連接 Cloudflare，永久免費，全家即時共享
     </div>`;
   }
   if(SHARED_BACKEND==='claude'){
     return `<div class="ai-banner">
-      🧪 目前在 Claude 對話視窗內預覽，僅供測試。請部署成獨立網站並設定 Firebase 才能讓全家手機真正共享。
+      🧪 目前在 Claude 對話視窗內預覽，僅供測試。
     </div>`;
   }
-  return `<div class="ai-banner" style="border-color:var(--soon);color:var(--soon);">
-    ⚠️ 尚未設定 Firebase，目前資料只存在「這支裝置的這個瀏覽器」，家人手機看不到。請依照隨附的「部署說明」設定免費 Firebase 以啟用全家共享。
+  return `<div class="ai-banner" style="border-color:var(--urgent);color:var(--urgent);flex-direction:column;align-items:flex-start;gap:6px;">
+    <div style="font-weight:800;">⚠️ 家人目前看不到你的資料</div>
+    <div style="font-size:11.5px;line-height:1.6;color:var(--ink);">
+      目前是「本機儲存」模式，資料只存在這台裝置。請在 index.html 頂端填入 CF_WORKER_URL 後重新部署。
+    </div>
   </div>`;
 }
  
@@ -887,7 +1012,8 @@ function renderSettings(){
     <button class="danger-btn" id="btn-clear-data">🗑️ 清空此家庭代碼所有食品資料</button>
  
     <p class="help-text" style="padding:18px 0 30px;">
-      💡 家庭代碼是共享資料的唯一依據：只要輸入相同代碼，所有家人都能看到同一份冰箱清單。請不要把代碼分享給家人以外的人。資料儲存在這個 App（artifact）內，重新整理或換裝置都不會遺失，但仍建議偶爾用「複製代碼」備份給家人保管。
+      💡 <strong>如何讓家人加入：</strong>點「複製家庭代碼」把代碼傳給家人 → 家人開啟此網頁 → 選「加入家庭」→ 貼上代碼 → 輸入自己名稱 → 開始使用。大家使用相同代碼，就能看到同一份冰箱清單。<br><br>
+      ⚠️ 注意：此 App 使用的是「本機儲存（localStorage）」模式，<strong>各裝置的資料是獨立的，家人看不到彼此新增的品項</strong>。如需真正跨裝置同步，請依照 README 設定 Firebase，並將 <code>FIREBASE_CONFIG</code> 填入 <code>index.html</code>。
     </p>
   </div>`;
 }
@@ -1200,7 +1326,7 @@ function wireShellEvents(){
     b.onclick=()=>{ STATE.view=b.dataset.nav; STATE.activeLocation=null; render(); };
   });
   const fab=document.getElementById('fab-add');
-  if(fab) fab.onclick=openAddMethodSheet;
+  if(fab) fab.onclick = STATE.view==='shoplist' ? ()=>{ document.getElementById('shop-input') && document.getElementById('shop-input').focus(); } : openAddMethodSheet;
  
   const searchInput=document.getElementById('search-input');
   if(searchInput){
@@ -1222,6 +1348,7 @@ function wireShellEvents(){
   if(back) back.onclick=()=>{ STATE.activeLocation=null; render(); };
  
   if(STATE.view==='settings') wireSettingsEvents();
+  if(STATE.view==='shoplist') wireShoplistEvents();
 }
  
 function renderInPlaceList(){
@@ -1238,6 +1365,94 @@ function renderInPlaceList(){
       const el=document.getElementById('search-input');
       if(el){ el.focus(); if(cursorPos!=null) el.setSelectionRange(cursorPos,cursorPos); }
     }
+  }
+}
+ 
+function wireShoplistEvents(){
+  let urgentOn = false;
+ 
+  const urgentBtn = document.getElementById('shop-urgent-btn');
+  if(urgentBtn){
+    urgentBtn.onclick = ()=>{
+      urgentOn = !urgentOn;
+      urgentBtn.classList.toggle('on', urgentOn);
+    };
+  }
+ 
+  const addBtn = document.getElementById('shop-add-btn');
+  if(addBtn){
+    addBtn.onclick = async ()=>{
+      const nameEl = document.getElementById('shop-input');
+      const noteEl = document.getElementById('shop-note');
+      const name = nameEl ? nameEl.value.trim() : '';
+      if(!name){ toast('請輸入品項名稱'); return; }
+      const note = noteEl ? noteEl.value.trim() : '';
+      const newItem = {
+        id: genId(), name, note, urgent: urgentOn,
+        addedBy: STATE.name, addedAt: new Date().toISOString(),
+        bought: false, boughtBy:'', boughtAt:''
+      };
+      STATE.shoplist.push(newItem);
+      await saveShoplist();
+      if(nameEl) nameEl.value='';
+      if(noteEl) noteEl.value='';
+      urgentOn=false;
+      render();
+      // refocus
+      setTimeout(()=>{ const el=document.getElementById('shop-input'); if(el) el.focus(); }, 50);
+    };
+    // Enter key in name field triggers add
+    const nameEl = document.getElementById('shop-input');
+    if(nameEl) nameEl.addEventListener('keydown', e=>{ if(e.key==='Enter') addBtn.click(); });
+  }
+ 
+  // Check/uncheck
+  document.querySelectorAll('[data-shop-check]').forEach(el=>{
+    el.onclick = async (e)=>{
+      e.stopPropagation();
+      const id = el.dataset.shopCheck;
+      const idx = STATE.shoplist.findIndex(i=>i.id===id);
+      if(idx<0) return;
+      STATE.shoplist[idx].bought = !STATE.shoplist[idx].bought;
+      if(STATE.shoplist[idx].bought){
+        STATE.shoplist[idx].boughtBy = STATE.name;
+        STATE.shoplist[idx].boughtAt = new Date().toISOString();
+      } else {
+        STATE.shoplist[idx].boughtBy = '';
+        STATE.shoplist[idx].boughtAt = '';
+      }
+      await saveShoplist();
+      render();
+    };
+  });
+ 
+  // Delete
+  document.querySelectorAll('[data-shop-del]').forEach(el=>{
+    el.onclick = async (e)=>{
+      e.stopPropagation();
+      const id = el.dataset.shopDel;
+      STATE.shoplist = STATE.shoplist.filter(i=>i.id!==id);
+      await saveShoplist();
+      render();
+    };
+  });
+ 
+  // Toggle show bought
+  const histToggle = document.getElementById('shop-history-toggle');
+  if(histToggle){
+    histToggle.onclick = ()=>{ STATE.showBought=!STATE.showBought; render(); };
+  }
+ 
+  // Clear bought
+  const clearBtn = document.getElementById('shop-clear-bought');
+  if(clearBtn){
+    clearBtn.onclick = async ()=>{
+      if(confirm('確定要清除所有已購買的記錄嗎？')){ 
+        STATE.shoplist = STATE.shoplist.filter(i=>!i.bought);
+        await saveShoplist();
+        render();
+      }
+    };
   }
 }
  
